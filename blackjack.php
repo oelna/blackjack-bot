@@ -1,4 +1,7 @@
 <?php
+// Made by: Arno Richter
+// Year:    2020
+// Source:  https://github.com/oelna/blackjack-bot
 
 ini_set('display_errors', '1');
 ini_set('display_startup_errors', '1');
@@ -35,9 +38,6 @@ if(!file_exists(MATCHES)) {
 		$card_key = $deck_keys[$random_key];
 		unset($deck_keys[$random_key]);
 		$deck_keys = array_values($deck_keys);
-
-		// echo('your card index is '.$card_key.BR);
-		// echo('remaining cards: '.sizeof($deck_keys).BR);
 
 		return $card_key;
 	}
@@ -115,11 +115,13 @@ if(!file_exists(MATCHES)) {
 		$players = array(clean_name($_GET['user1']), clean_name($_GET['user2']));
 		sort($players);
 		$filename = mb_strtolower(implode('-', $players)).'.json';
-	} else die('Missing parameters');
+	} else {
+		echo('Syntax: !blackjack <username> [new, status, hit, stand, help]'.BR);
+		die();
+	};
 
 	if(mb_strtolower($_GET['command']) == 'new') {
-		
-		// echo('Neue Runde!'.BR);
+		// start a new round
 
 		$player_cards = array(
 			$_GET['user1'] => array(),
@@ -153,11 +155,39 @@ if(!file_exists(MATCHES)) {
 		$json['nextPlayer'] = array_rand($players);
 
 		echo('It\'s '.$players[$json['nextPlayer']].'\'s turn!');
-		// echo(json_encode($json));
 
-		file_put_contents(MATCHES.DIRECTORY_SEPARATOR.$filename, json_encode($json));
+		file_put_contents(MATCHES.DIRECTORY_SEPARATOR.$filename, json_encode($json, JSON_PRETTY_PRINT));
+	} elseif(mb_strtolower($_GET['command']) == 'status') {
+		if(!file_exists(MATCHES.DIRECTORY_SEPARATOR.$filename)) {
+			die('This match is not currently running. Start a new one?');
+		}
+
+		$json = file_get_contents(MATCHES.DIRECTORY_SEPARATOR.$filename);
+
+		$data = json_decode($json, true);
+
+		if($data['matchEnded'] === true) {
+			die('This match has ended. Start a new one?');
+		}
+
+		$player1 = $players[0];
+		$player2 = $players[1];
+		$sum_player1 = card_sum($data['players'][$player1]);
+		$sum_player2 = card_sum($data['players'][$player2]);
+
+		echo($player1.' has '.$sum_player1.' '.BR);
+		echo($player2.' has '.$sum_player2.' '.BR);
+		echo('It\'s '.$players[$data['nextPlayer']].'\'s turn.');
+		die();
+
+	} elseif(mb_strtolower($_GET['command']) == 'help') {
+		// show usage help
+
+		echo('Syntax: !blackjack <username> [new, status, hit, stand, help]'.BR);
+		die();
+
 	} elseif(mb_strtolower($_GET['command']) == 'stand') {
-		// echo('Bestehendes Match!'.BR);
+		// existing match, stand.
 		
 		if(!file_exists(MATCHES.DIRECTORY_SEPARATOR.$filename)) {
 			die('This match is not currently running. Start a new one?');
@@ -175,28 +205,49 @@ if(!file_exists(MATCHES)) {
 
 			if(sizeof($data['stand']) == sizeof($players)) {
 				// all players have stood, calculate results
-				echo('All stand.'.BR);
+				echo('All stand. '.BR);
 
 				$data['matchEnded'] = true;
 
-				file_put_contents(MATCHES.DIRECTORY_SEPARATOR.$filename, json_encode($data));
+				file_put_contents(MATCHES.DIRECTORY_SEPARATOR.$filename, json_encode($data, JSON_PRETTY_PRINT));
 
-				die('Somebody won!');
+				$player1 = $players[0];
+				$player2 = $players[1];
+				$sum_player1 = card_sum($data['players'][$player1]);
+				$sum_player2 = card_sum($data['players'][$player2]);
+
+				echo(' '.$player1.' has '.$sum_player1.', '.$player2.' has '.$sum_player2.'. ');
+				
+				if($sum_player1 > $sum_player2) {
+					echo($player1.' won!');
+				} elseif($sum_player1 < $sum_player2) {
+					echo($player2.' won!');
+				} else {
+					// it's a draw!
+					echo('It\'s a tie!');
+				}
+
+				@unlink(MATCHES.DIRECTORY_SEPARATOR.$filename);
+
+				die();
 			} else {
+				$opponent = $data['nextPlayer'];
+				$opponent_sum = card_sum($data['players'][$players[$opponent]]);
+
 				$data['nextPlayer'] = ($data['nextPlayer'] + 1) % sizeof($players);
+				$next_player_sum = card_sum($data['players'][$players[$data['nextPlayer']]]);
 				$data['matchActive'] = time();
 
-				echo('It\'s your turn, '.$players[$data['nextPlayer']].'!'.BR);
-				// var_dump($data);
-				file_put_contents(MATCHES.DIRECTORY_SEPARATOR.$filename, json_encode($data));
+				echo($players[$opponent].' stands at '.$opponent_sum.'. It\'s '.$players[$data['nextPlayer']].'\'s turn with '.$next_player_sum.'.');
+
+				file_put_contents(MATCHES.DIRECTORY_SEPARATOR.$filename, json_encode($data, JSON_PRETTY_PRINT));
 			}
 
 		} else {
-			echo('It\'s not your turn yet!'.BR);
-			// var_dump($data);
+			echo('It\'s not your turn yet!');
 		}
 	} else {
-		// echo('Bestehendes Match!'.BR);
+		// existing match, hit!
 		
 		if(!file_exists(MATCHES.DIRECTORY_SEPARATOR.$filename)) {
 			die('This match is not currently running. Start a new one?');
@@ -205,7 +256,7 @@ if(!file_exists(MATCHES)) {
 		$json = file_get_contents(MATCHES.DIRECTORY_SEPARATOR.$filename);
 
 		$data = json_decode($json, true);
-		
+
 		$drawn_cards = array();
 		foreach ($players as $player) {
 			$drawn_cards = array_merge($data['players'][$player], $drawn_cards);
@@ -218,36 +269,43 @@ if(!file_exists(MATCHES)) {
 
 		$deck_keys = $remaining_cards;
 		
-
 		if($players[$data['nextPlayer']] == mb_strtolower($_GET['user1'])) {
-			// echo('drawing for '.$_GET['user1']);
-			
-			$card_index = draw();
-			$card_name = card_name($card_index);
+			// drawing for user1
 
-			echo('Player '.$_GET['user1'].' drew '.$card_name.', '.BR);
-			$data['players'][$_GET['user1']][] = $card_index;
+			if(in_array($players[$data['nextPlayer']], $data['stand'])) {
+				// this player has quit drawing, skip!
+				echo($players[$data['nextPlayer']].' is standing. '.BR);
+			} else {
+				// draw a card
+				$card_index = draw();
+				$card_name = card_name($card_index);
 
-			// detect win condition
-			$sum = card_sum($data['players'][$_GET['user1']]);
-			if($sum > WINVALUE) {
-				unlink(MATCHES.DIRECTORY_SEPARATOR.$filename);
-				die($_GET['user1'].' lost with '.$sum.'!');
+				echo('Player '.$_GET['user1'].' drew '.$card_name.', '.BR);
+				$data['players'][$_GET['user1']][] = $card_index;
+
+				// detect win condition
+				$sum = card_sum($data['players'][$_GET['user1']]);
+				if($sum > WINVALUE) {
+					unlink(MATCHES.DIRECTORY_SEPARATOR.$filename);
+					die($_GET['user1'].' lost with '.$sum.'!');
+				}
+				
+				echo('Sum: '.card_sum($data['players'][$_GET['user1']]).' '.BR);
 			}
-			
-			echo('Sum: '.card_sum($data['players'][$_GET['user1']]).' '.BR);
-			
+
 			$data['nextPlayer'] = ($data['nextPlayer'] + 1) % sizeof($players);
+			if(in_array($players[$data['nextPlayer']], $data['stand'])) {
+				// rotate to the next player, if this one already stands
+				$data['nextPlayer'] = ($data['nextPlayer'] + 1) % sizeof($players);
+			}
 			$data['matchActive'] = time();
 
-			echo('It\'s your turn, '.$players[$data['nextPlayer']].'!'.BR);
-			// var_dump($data);
+			echo('It\'s your turn, '.$players[$data['nextPlayer']].'!');
 
-			file_put_contents(MATCHES.DIRECTORY_SEPARATOR.$filename, json_encode($data));
+			file_put_contents(MATCHES.DIRECTORY_SEPARATOR.$filename, json_encode($data, JSON_PRETTY_PRINT));
 
 		} else {
-			echo('It\'s not your turn yet!'.BR);
-			// var_dump($data);
+			echo('It\'s not your turn yet!');
 		}
 		
 	}
