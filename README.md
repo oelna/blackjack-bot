@@ -24,13 +24,13 @@ To start a new match against user `selimhex`, type
 Draw cards with `hit`, like so:  
 `!blackjack selimhex hit`
 
-When you're confident you have drawn enough, you can 'stand'. You will not be able to draw further cards!  
+When you're confident you have drawn enough, you can `stand`. You will not be able to draw further cards!  
 `!blackjack selimhex stand`
 
-If you'd just like to know the current standings, use 'status':  
+If you'd just like to know the current standings, use `status`:  
 `!blackjack selimhex status`
 
-And to show very basic usage of the bot, enter 'help':  
+And to show very basic usage of the bot, enter `help`:  
 `!blackjack selimhex help`
 
 ## Feedback and improvements
